@@ -349,6 +349,8 @@ namespace realsense2_camera
         mutable std::condition_variable _cv_temp, _cv_mpc, _cv_tf;
         bool _is_profile_changed;
         bool _is_align_depth_changed;
+        bool _is_vertical_flip_enabled;
+        cv::Mat _cv_matrix_image_flipped;
 
         std::shared_ptr<diagnostic_updater::Updater> _diagnostics_updater;
         rs2::stream_profile _base_profile;

@@ -41,6 +41,7 @@ SyncedImuPublisher::~SyncedImuPublisher()
     catch(...){} // Not allowed to throw from Dtor
 }
 
+
 void SyncedImuPublisher::Publish(sensor_msgs::msg::Imu imu_msg)
 {
     std::lock_guard<std::mutex> lock_guard(_mutex);
@@ -118,7 +119,8 @@ BaseRealSenseNode::BaseRealSenseNode(rclcpp::Node& node,
     _pointcloud(false),
     _imu_sync_method(imu_sync_method::NONE),
     _is_profile_changed(false),
-    _is_align_depth_changed(false)
+    _is_align_depth_changed(false),
+    _is_vertical_flip_enabled(false)
 #if defined (ACCELERATE_GPU_WITH_GLSL)
     ,_app(1280, 720, "RS_GLFW_Window"),
     _accelerate_gpu_with_glsl(false),
@@ -912,17 +914,35 @@ bool BaseRealSenseNode::fillROSImageMsgAndReturnStatus(
                                    << "Please try different format of this stream.");
         return false;
     }
-    // Convert the CV::Mat into a ROS image message (1 copy is done here)
-    cv_bridge::CvImage(std_msgs::msg::Header(), _rs_format_to_ros_format[stream_format], cv_matrix_image).toImageMsg(*img_msg_ptr);
 
-    // Convert OpenCV Mat to ROS Image
-    img_msg_ptr->header.frame_id = OPTICAL_FRAME_ID(stream);
-    img_msg_ptr->header.stamp = t;
-    img_msg_ptr->height = height;
-    img_msg_ptr->width = width;
-    img_msg_ptr->is_bigendian = false;
-    img_msg_ptr->step = width * cv_matrix_image.elemSize();
-    return true;
+    if (_is_vertical_flip_enabled) {
+        cv::flip(cv_matrix_image,_cv_matrix_image_flipped,0);
+
+        // Convert the CV::Mat into a ROS image message (1 copy is done here)
+        cv_bridge::CvImage(std_msgs::msg::Header(), _rs_format_to_ros_format[stream_format], _cv_matrix_image_flipped).toImageMsg(*img_msg_ptr);
+
+        // Convert OpenCV Mat to ROS Image
+        img_msg_ptr->header.frame_id = OPTICAL_FRAME_ID(stream);
+        img_msg_ptr->header.stamp = t;
+        img_msg_ptr->height = height;
+        img_msg_ptr->width = width;
+        img_msg_ptr->is_bigendian = false;
+        img_msg_ptr->step = width * _cv_matrix_image_flipped.elemSize();
+        return true;
+    }
+    else {
+        // Convert the CV::Mat into a ROS image message (1 copy is done here)
+        cv_bridge::CvImage(std_msgs::msg::Header(), _rs_format_to_ros_format[stream_format], cv_matrix_image).toImageMsg(*img_msg_ptr);
+
+        // Convert OpenCV Mat to ROS Image
+        img_msg_ptr->header.frame_id = OPTICAL_FRAME_ID(stream);
+        img_msg_ptr->header.stamp = t;
+        img_msg_ptr->height = height;
+        img_msg_ptr->width = width;
+        img_msg_ptr->is_bigendian = false;
+        img_msg_ptr->step = width * cv_matrix_image.elemSize();
+        return true;
+    }
 }
 
 bool BaseRealSenseNode::fillCVMatImageAndReturnStatus(
